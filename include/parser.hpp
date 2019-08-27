@@ -6,6 +6,7 @@
 #include <tuple>
 #include <type_traits>
 #include <utility>
+#include <variant>
 #include <vector>
 
 namespace parser {
@@ -427,6 +428,9 @@ constexpr auto to_bullet_rules(set<rule<Lhs, Rhs...>, Rules...>) noexcept
 template <typename... Ts>
 constexpr auto to_tuple(set<Ts...>) noexcept -> std::tuple<Ts...>;
 
+template <typename... Ts>
+constexpr auto to_variant(set<Ts...>) noexcept -> std::variant<Ts...>;
+
 template <typename Prefix, typename... Prefixes, typename Rule,
           typename... Rules>
 constexpr bool is_prefix(set<Prefix, Prefixes...>,
@@ -592,27 +596,28 @@ constexpr auto init_rows(Start, set<Rules...> rules, set<Nonterminals...>,
 }
 
 template <typename Symbols, typename Lhs, typename... Rhs>
-constexpr void update_nonterminal(Symbols &symbols) {
-  std::get<Lhs>(symbols) =
-      Lhs((std::get<Rhs>(symbols))...);
-  std::cout << Lhs() << ' ' << std::get<Lhs>(symbols).value << '\n';
+constexpr void eval_nonterminal(Symbols &symbols) {
+  auto args_iter = symbols.end() - sizeof...(Rhs);
+  Lhs nonterminal{(get<Rhs>(*args_iter++))...};
+  symbols.erase(symbols.end() - sizeof...(Rhs), symbols.end());
+  symbols.emplace_back(std::move(nonterminal));
 }
 
-template <typename... Symbols> using update_fn = void (*)(std::tuple<Symbols...> &);
+template <typename... Symbols> using eval_fn = void (*)(std::vector<std::variant<Symbols...>> &);
 
 template <typename Lhs, typename... Rhs, typename... Symbols>
-constexpr update_fn<Symbols...> init_update_fn(rule<Lhs, Rhs...>,
+constexpr eval_fn<Symbols...> init_eval_fn(rule<Lhs, Rhs...>,
                                                set<Symbols...>) noexcept {
-  return &update_nonterminal<std::tuple<Symbols...>, Lhs, Rhs...>;
+  return &eval_nonterminal<std::vector<std::variant<Symbols...>>, Lhs, Rhs...>;
 }
 
 template <typename... Symbols>
-constexpr auto make_update_fn(set<Symbols...>) -> update_fn<Symbols...>;
+constexpr auto make_eval_fn(set<Symbols...>) -> eval_fn<Symbols...>;
 
 template <typename... Rules, typename... Symbols>
-constexpr std::array<update_fn<Symbols...>, sizeof...(Rules)>
-init_update_fns(set<Rules...>, set<Symbols...> symbols) noexcept {
-  return {init_update_fn(Rules(), symbols)...};
+constexpr std::array<eval_fn<Symbols...>, sizeof...(Rules)>
+init_eval_fns(set<Rules...>, set<Symbols...> symbols) noexcept {
+  return {init_eval_fn(Rules(), symbols)...};
 }
 
 template <typename Start, typename Rules, typename Nonterminals,
@@ -627,41 +632,34 @@ struct transition_table {
                    states::num_elements>
       rows = init_rows(Start(), rules(), Nonterminals(), Terminals(), states());
 
-  const std::array<decltype(make_update_fn(symbols())), rules::num_elements>
-      update_functions =
-          init_update_fns(Rules(), join(Terminals(), Nonterminals()));
+  const std::array<decltype(make_eval_fn(symbols())), rules::num_elements>
+      eval_functions =
+          init_eval_fns(Rules(), join(Terminals(), Nonterminals()));
 
-  decltype(to_tuple(symbols())) store{};
   std::vector<size_t> stack{0};
+  std::vector<decltype(to_variant(symbols()))> values{0};
 
-  template <typename Token> bool read_token(Token const &token) {
-    std::get<idx_of(token, Terminals())>(store) = token;
+  template <typename Token> bool read_token(Token &&token) {
     size_t action_idx = idx_of(token, Terminals());
     while (true) {
       action const &act = rows[stack.back()].actions[action_idx];
-      std::cout << "Action idx: " << action_idx << ", Stack: " << stack << '\n';
       switch (act.type) {
       case action_type::Shift:
-        std::cout << "Read " << token << '\n';
-        std::cout << "State " << stack.back() << ", Shift " << act.idx << '\n';
         stack.push_back(act.idx);
+        values.emplace_back(std::move(token));
         return false;
       case action_type::Reduce: {
-        std::cout << "State " << stack.back() << ", Reduce " << act.pop_nr
-                  << " states\n";
-        (update_functions[act.produce_fn])(store);
+        (eval_functions[act.produce_fn])(values);
         stack.erase(stack.end() - act.pop_nr, stack.end());
         action_idx = act.idx;
         continue;
       }
       case action_type::Goto: {
-        std::cout << "State " << stack.back() << ", Goto " << act.idx << "\n";
         stack.push_back(act.idx);
         action_idx = idx_of(token, Terminals());
         continue;
       }
       case action_type::Accept:
-        std::cout << "Accept\n";
         return true;
       default:
         throw std::runtime_error{"Invalid input token"};
@@ -671,8 +669,8 @@ struct transition_table {
 
   Start const &get_parse_result() {
     if (rows[stack.back()].actions[0].type == action_type::Accept) {
-      (update_functions[rows[stack.back()].actions[0].produce_fn])(store);
-      return std::get<Start>(store);
+      (eval_functions[rows[stack.back()].actions[0].produce_fn])(values);
+      return std::get<Start>(values.back());
     } else {
       throw std::runtime_error{"Parse result not available yet"};
     }

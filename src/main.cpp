@@ -127,14 +127,16 @@ public:
         default:
           return {};
         }
-      } catch (...) {
+      } catch (std::exception const &e) {
+        std::cout << e.what() << '\n';
         return {};
       }
       input = input.substr(1);
     }
     try {
       table.read_token(end());
-    } catch (...) {
+    } catch (std::exception const &e) {
+      std::cout << e.what() << '\n';
       return {};
     }
     return {table.get_parse_result().value};
@@ -147,7 +149,7 @@ int main() {
 
   scanner scan;
   using namespace std::literals::string_view_literals;
-  if (auto result = scan.parse("4 + (5)"sv); result) {
+  if (auto result = scan.parse("1 + (3 + 2) + (9) + 4"sv); result) {
     std::cout << "Parsing successful: " << *result << '\n';
   } else {
     std::cout << "Parsing failed\n";
