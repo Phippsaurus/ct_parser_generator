@@ -42,8 +42,9 @@ struct T {
 
 struct id {
   int i = 0;
-  friend std::ostream &operator<<(std::ostream &stream, id const &) {
-    stream << "id";
+  id(int i) : i(i) {}
+  friend std::ostream &operator<<(std::ostream &stream, id const &i) {
+    stream << i.i;
     return stream;
   }
 };
@@ -62,11 +63,11 @@ struct rparen {
   }
 };
 
-using rule1 = rule<S, set<>, E, end>;
-using rule2 = rule<E, set<>, E, plus, T>;
-using rule3 = rule<E, set<>, T>;
-using rule4 = rule<T, set<>, id>;
-using rule5 = rule<T, set<>, lparen, E, rparen>;
+using rule1 = rule<S, E, end>;
+using rule2 = rule<E, E, plus, T>;
+using rule3 = rule<E, T>;
+using rule4 = rule<T, id>;
+using rule5 = rule<T, lparen, E, rparen>;
 
 using rules = set<rule1, rule2, rule3, rule4, rule5>;
 using terminals = set<id, lparen, rparen, plus, end>;
@@ -91,7 +92,7 @@ public:
         case '7':
         case '8':
         case '9':
-          table.read_token(id());
+          table.read_token(id(input[0] - '0'));
           break;
         case '+':
           table.read_token(plus());

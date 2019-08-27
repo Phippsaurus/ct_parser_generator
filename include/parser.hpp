@@ -32,50 +32,51 @@ template <size_t Idx, typename T, typename... Ts,
 constexpr auto get_element(set<T, Ts...>) noexcept
     -> decltype(get_element<Idx - 1>(set<Ts...>()));
 
-template <typename T, typename... Ts> void print_pack(std::ostream &stream) {
-  stream << T();
-  if constexpr (sizeof...(Ts) > 0) {
-    stream << ' ';
-    print_pack<Ts...>(stream);
-  }
-}
+// template <typename T, typename... Ts> void print_pack(std::ostream &stream) {
+//   stream << T();
+//   if constexpr (sizeof...(Ts) > 0) {
+//     stream << ' ';
+//     print_pack<Ts...>(stream);
+//   }
+// }
 
-void print_pack(std::ostream &, set<>) {}
+// void print_pack(std::ostream &, set<>) {}
 
-template <typename... Ts,
-          typename std::enable_if<sizeof...(Ts) == 0, int>::type = 0>
-void print_pack(std::ostream &) {}
+// template <typename... Ts,
+//           typename std::enable_if<sizeof...(Ts) == 0, int>::type = 0>
+// void print_pack(std::ostream &) {}
 
-template <typename T, typename... Ts>
-void print_pack(std::ostream &stream, set<T, Ts...>) {
-  stream << T();
-  if constexpr (sizeof...(Ts) > 0) {
-    stream << ' ';
-    print_pack<Ts...>(stream);
-  }
-}
+// template <typename T, typename... Ts>
+// void print_pack(std::ostream &stream, set<T, Ts...>) {
+//   stream << T();
+//   if constexpr (sizeof...(Ts) > 0) {
+//     stream << ' ';
+//     print_pack<Ts...>(stream);
+//   }
+// }
 
-template <typename Lhs, typename Seen, typename... Rhs> struct rule {
-  friend std::ostream &operator<<(std::ostream &stream, rule const &) {
-    stream << Lhs() << " => ";
-    print_pack(stream, Seen());
-    stream << " • ";
-    print_pack<Rhs...>(stream);
-    stream << '\n';
-    return stream;
-  }
+template <typename Lhs, typename Seen, typename... Rhs> struct bullet_rule {
+  // friend std::ostream &operator<<(std::ostream &stream, bullet_rule const &)
+  // {
+  //   stream << Lhs() << " => ";
+  //   print_pack(stream, Seen());
+  //   stream << " • ";
+  //   print_pack<Rhs...>(stream);
+  //   stream << '\n';
+  //   return stream;
+  // }
 };
 
 template <typename Lhs, typename... Seen, typename... Rhs>
-constexpr auto lhs(rule<Lhs, set<Seen...>, Rhs...>) -> Lhs;
+constexpr auto lhs(bullet_rule<Lhs, set<Seen...>, Rhs...>) -> Lhs;
 
 template <typename Lhs, typename... Seen, typename... Rhs>
-constexpr size_t sizeof_rhs(rule<Lhs, set<Seen...>, Rhs...>) {
+constexpr size_t sizeof_rhs(bullet_rule<Lhs, set<Seen...>, Rhs...>) {
   return sizeof...(Rhs);
 }
 
 template <typename Lhs, typename... Rhs>
-constexpr auto make_rule(Lhs, Rhs...) -> rule<Lhs, set<>, Rhs...>;
+constexpr auto make_rule(Lhs, Rhs...) -> bullet_rule<Lhs, set<>, Rhs...>;
 
 template <typename... T, typename Element>
 constexpr bool contains(set<T...>, Element) noexcept {
@@ -138,7 +139,7 @@ constexpr auto join(set<Ts...>, set<U, Us...>)
                      set<Us...>()));
 
 template <typename Lhs, typename... Seen, typename First, typename... Rhs>
-constexpr auto first(rule<Lhs, set<Seen...>, First, Rhs...>) -> First;
+constexpr auto first(bullet_rule<Lhs, set<Seen...>, First, Rhs...>) -> First;
 
 template <typename Nonterminal>
 constexpr auto with_lhs(Nonterminal nonterminal, set<>) -> set<>;
@@ -148,8 +149,8 @@ template <typename Nonterminal, typename Lhs, typename... Seen, typename... Rhs,
           typename std::enable_if<std::is_same<Nonterminal, Lhs>::value,
                                   int>::type = 0>
 constexpr auto with_lhs(Nonterminal nonterminal,
-                        set<rule<Lhs, set<Seen...>, Rhs...>, Rules...>)
-    -> decltype(prepend(rule<Lhs, set<Seen...>, Rhs...>(),
+                        set<bullet_rule<Lhs, set<Seen...>, Rhs...>, Rules...>)
+    -> decltype(prepend(bullet_rule<Lhs, set<Seen...>, Rhs...>(),
                         with_lhs(nonterminal, set<Rules...>())));
 
 template <typename Nonterminal, typename Lhs, typename... Seen, typename... Rhs,
@@ -157,14 +158,14 @@ template <typename Nonterminal, typename Lhs, typename... Seen, typename... Rhs,
           typename std::enable_if<!std::is_same<Nonterminal, Lhs>::value,
                                   int>::type = 0>
 constexpr auto with_lhs(Nonterminal nonterminal,
-                        set<rule<Lhs, set<Seen...>, Rhs...>, Rules...>)
+                        set<bullet_rule<Lhs, set<Seen...>, Rhs...>, Rules...>)
     -> decltype(with_lhs(nonterminal, set<Rules...>()));
 
 template <typename Lhs, typename... Seen, typename FirstRhs, typename... Rhs,
           typename... Rules, typename... Nonterminals,
           typename std::enable_if<contains_t<FirstRhs, Nonterminals...>::value,
                                   int>::type = 0>
-constexpr auto expand(rule<Lhs, set<Seen...>, FirstRhs, Rhs...>,
+constexpr auto expand(bullet_rule<Lhs, set<Seen...>, FirstRhs, Rhs...>,
                       set<Rules...> rules, set<Nonterminals...> nonterminals)
     -> decltype(with_lhs(std::declval<FirstRhs>(), rules));
 
@@ -172,9 +173,9 @@ template <typename Lhs, typename... Seen, typename FirstRhs, typename... Rhs,
           typename... Rules, typename... Nonterminals,
           typename std::enable_if<!contains_t<FirstRhs, Nonterminals...>::value,
                                   int>::type = 0>
-constexpr auto expand(rule<Lhs, set<Seen...>, FirstRhs, Rhs...> rule,
-                      set<Rules...> rules, set<Nonterminals...> nonterminals)
-    -> set<>;
+constexpr auto
+expand(bullet_rule<Lhs, set<Seen...>, FirstRhs, Rhs...> bullet_rule,
+       set<Rules...> rules, set<Nonterminals...> nonterminals) -> set<>;
 
 template <typename... AllRules, typename... Nonterminals>
 constexpr auto closures(set<>, set<AllRules...>, set<Nonterminals...>) -> set<>;
@@ -182,37 +183,39 @@ constexpr auto closures(set<>, set<AllRules...>, set<Nonterminals...>) -> set<>;
 template <typename Lhs, typename... Seen, typename... Rhs, typename... Rules,
           typename... AllRules, typename... Nonterminals,
           typename std::enable_if<sizeof...(Rhs) == 0, int>::type = 0>
-constexpr auto closures(set<rule<Lhs, set<Seen...>, Rhs...>, Rules...>,
+constexpr auto closures(set<bullet_rule<Lhs, set<Seen...>, Rhs...>, Rules...>,
                         set<AllRules...> all_rules,
                         set<Nonterminals...> nonterminals)
-    -> decltype(prepend(rule<Lhs, set<Seen...>>(),
+    -> decltype(prepend(bullet_rule<Lhs, set<Seen...>>(),
                         closures(set<Rules...>(), all_rules, nonterminals)));
 
 template <typename Lhs, typename... Seen, typename... Rhs, typename... Rules,
           typename... AllRules, typename... Nonterminals,
-          typename std::enable_if<(sizeof...(Seen) == 0 && sizeof...(Rhs) > 0), int>::type = 0>
-constexpr auto closures(set<rule<Lhs, set<Seen...>, Rhs...>, Rules...>,
+          typename std::enable_if<(sizeof...(Seen) == 0 && sizeof...(Rhs) > 0),
+                                  int>::type = 0>
+constexpr auto closures(set<bullet_rule<Lhs, set<Seen...>, Rhs...>, Rules...>,
                         set<AllRules...> all_rules,
                         set<Nonterminals...> nonterminals)
     -> decltype(join(
-        prepend(rule<Lhs, set<Seen...>, Rhs...>(),
-                closures(expand(rule<Lhs, set<Seen...>, Rhs...>(), all_rules,
-                                nonterminals),
+        prepend(bullet_rule<Lhs, set<Seen...>, Rhs...>(),
+                closures(expand(bullet_rule<Lhs, set<Seen...>, Rhs...>(),
+                                all_rules, nonterminals),
                          all_rules, remove(nonterminals, std::declval<Lhs>()))),
         closures(set<Rules...>(), all_rules, nonterminals)));
 
 template <typename Lhs, typename... Seen, typename... Rhs, typename... Rules,
           typename... AllRules, typename... Nonterminals,
-          typename std::enable_if<(sizeof...(Seen) > 0 && sizeof...(Rhs) > 0), int>::type = 0>
-constexpr auto closures(set<rule<Lhs, set<Seen...>, Rhs...>, Rules...>,
+          typename std::enable_if<(sizeof...(Seen) > 0 && sizeof...(Rhs) > 0),
+                                  int>::type = 0>
+constexpr auto closures(set<bullet_rule<Lhs, set<Seen...>, Rhs...>, Rules...>,
                         set<AllRules...> all_rules,
                         set<Nonterminals...> nonterminals)
-    -> decltype(join(
-        prepend(rule<Lhs, set<Seen...>, Rhs...>(),
-                closures(expand(rule<Lhs, set<Seen...>, Rhs...>(), all_rules,
-                                nonterminals),
-                         all_rules, nonterminals)),
-        closures(set<Rules...>(), all_rules, nonterminals)));
+    -> decltype(
+        join(prepend(bullet_rule<Lhs, set<Seen...>, Rhs...>(),
+                     closures(expand(bullet_rule<Lhs, set<Seen...>, Rhs...>(),
+                                     all_rules, nonterminals),
+                              all_rules, nonterminals)),
+             closures(set<Rules...>(), all_rules, nonterminals)));
 
 template <typename Nonterminal, typename... Rules, typename... Nonterminals,
           typename std::enable_if<
@@ -231,24 +234,27 @@ constexpr auto closure(Nonterminal nonterminal, set<Rules...>,
 template <typename Symbol> constexpr auto go_to(Symbol symbol, set<>) -> set<>;
 
 template <typename Symbol, typename Lhs, typename... Seen, typename... Rules>
-constexpr auto go_to(Symbol symbol, set<rule<Lhs, set<Seen...>>, Rules...>)
+constexpr auto go_to(Symbol symbol,
+                     set<bullet_rule<Lhs, set<Seen...>>, Rules...>)
     -> decltype(go_to(symbol, set<Rules...>()));
 
 template <typename Symbol, typename Lhs, typename... Seen, typename FirstRhs,
           typename... Rhs, typename... Rules,
           typename std::enable_if<!std::is_same<FirstRhs, Symbol>::value,
                                   int>::type = 0>
-constexpr auto go_to(Symbol symbol,
-                     set<rule<Lhs, set<Seen...>, FirstRhs, Rhs...>, Rules...>)
+constexpr auto
+go_to(Symbol symbol,
+      set<bullet_rule<Lhs, set<Seen...>, FirstRhs, Rhs...>, Rules...>)
     -> decltype(go_to(symbol, set<Rules...>()));
 
 template <typename Symbol, typename Lhs, typename... Seen, typename FirstRhs,
           typename... Rhs, typename... Rules,
           typename std::enable_if<std::is_same<FirstRhs, Symbol>::value,
                                   int>::type = 0>
-constexpr auto go_to(Symbol symbol,
-                     set<rule<Lhs, set<Seen...>, FirstRhs, Rhs...>, Rules...>)
-    -> decltype(prepend(rule<Lhs, set<Seen..., FirstRhs>, Rhs...>(),
+constexpr auto
+go_to(Symbol symbol,
+      set<bullet_rule<Lhs, set<Seen...>, FirstRhs, Rhs...>, Rules...>)
+    -> decltype(prepend(bullet_rule<Lhs, set<Seen..., FirstRhs>, Rhs...>(),
                         go_to(symbol, set<Rules...>())));
 
 template <typename... Nonterminals, typename... Rules, typename... AllRules>
@@ -375,7 +381,18 @@ constexpr size_t idx_of() noexcept {
 template <typename FindSymbol, typename Symbol, typename... Symbols,
           typename std::enable_if<
               contains_t<FindSymbol, Symbol, Symbols...>::value, int>::type = 0>
-constexpr size_t idx_of(FindSymbol const &, set<Symbol, Symbols...>) noexcept {
+constexpr size_t idx_of(FindSymbol const &, set<Symbol, Symbols...> const &) noexcept {
+  if constexpr (std::is_same<FindSymbol, Symbol>::value) {
+    return 0;
+  } else {
+    return idx_of<1, FindSymbol, Symbols...>();
+  }
+}
+
+template <typename FindSymbol, typename Symbol, typename... Symbols,
+          typename std::enable_if<
+              contains_t<FindSymbol, Symbol, Symbols...>::value, int>::type = 0>
+constexpr size_t idx_of(set<Symbol, Symbols...> const &) noexcept {
   if constexpr (std::is_same<FindSymbol, Symbol>::value) {
     return 0;
   } else {
@@ -418,6 +435,7 @@ constexpr auto make_row(set<Rules...> state, set<States...> states,
     -> decltype(prepend(go_to(std::declval<Symbol>(), state),
                         make_row(state, states, set<Symbols...>())));
 
+/*
 template <typename Rule, typename... Rules>
 void print_state(std::ostream &stream) {
   stream << Rule();
@@ -432,8 +450,10 @@ void print_state(std::ostream &stream, set<Rule, Rules...>) {
   if constexpr (sizeof...(Rules) > 0) {
     print_state<Rules...>(stream);
   }
+        case '5':
 }
 
+        case '5':
 template <size_t Idx, typename State, typename... States>
 void print_states(std::ostream &stream) {
   stream << "State " << Idx << ":\n";
@@ -467,6 +487,7 @@ void print_rules(std::ostream &stream, set<Rule, Rules...>) {
     print_rules<Idx + 1, Rules...>(stream);
   }
 }
+*/
 
 std::ostream &operator<<(std::ostream &stream, std::vector<size_t> const &vec) {
   for (auto i : vec) {
@@ -475,20 +496,28 @@ std::ostream &operator<<(std::ostream &stream, std::vector<size_t> const &vec) {
   return stream;
 }
 
+template <typename Lhs, typename... Rhs> struct rule {};
+
+constexpr auto to_bullet_rules(set<>) -> set<>;
+
+template <typename Lhs, typename... Rhs, typename... Rules>
+constexpr auto to_bullet_rules(set<rule<Lhs, Rhs...>, Rules...>)
+    -> decltype(prepend(bullet_rule<Lhs, set<>, Rhs...>(),
+                        to_bullet_rules(set<Rules...>())));
+
 template <typename Start, typename Rules, typename Nonterminals,
           typename Terminals>
 struct transition_table {
+  using rules = decltype(to_bullet_rules(Rules()));
   using states = decltype(
-      make_states(std::declval<Start>(), Rules(), Nonterminals(), Terminals()));
+      make_states(std::declval<Start>(), rules(), Nonterminals(), Terminals()));
   using symbols = decltype(join(Terminals(), Nonterminals()));
   std::array<decltype(make_row(Terminals(), Nonterminals())),
              states::num_elements>
       rows;
   std::vector<size_t> stack{0};
 
-  template <typename Token, typename std::enable_if<
-                                contains(Terminals(), Token()), int>::type = 0>
-  bool read_token(Token const &token) {
+  template <typename Token> bool read_token(Token const &token) {
     std::cout << "Read " << token << '\n';
     size_t action_idx = idx_of(token, Terminals());
     while (true) {
@@ -527,8 +556,8 @@ struct transition_table {
       stream << row << '\n';
     }
     stream << '\n';
-    print_rules<0>(stream, Rules());
-    print_states<0>(stream, states());
+    // print_rules<0>(stream, Rules());
+    // print_states<0>(stream, states());
     return stream;
   }
 };
@@ -578,8 +607,8 @@ init_row_gotos(transition_table_row<AllSymbols...> &row, set<State...> state,
 }
 
 template <typename Lhs, typename... Seen, typename... Rhs, typename... Rules>
-constexpr bool
-contains_reduce(set<rule<Lhs, set<Seen...>, Rhs...>, Rules...>) noexcept {
+constexpr bool contains_reduce(
+    set<bullet_rule<Lhs, set<Seen...>, Rhs...>, Rules...>) noexcept {
   if constexpr (sizeof...(Rhs) == 0) {
     return true;
   } else {
@@ -592,16 +621,18 @@ constexpr bool contains_reduce(set<>) noexcept { return false; }
 template <typename Lhs, typename... Seen, typename... Rhs, typename... Rules,
           typename... AllRules,
           typename std::enable_if<sizeof...(Rhs) == 0, int>::type = 0>
-constexpr size_t reduce_rule(set<rule<Lhs, set<Seen...>, Rhs...>, Rules...>,
-                             set<AllRules...>) noexcept {
-  return idx_of<0, rule<Lhs, set<>, Seen...>, AllRules...>();
+constexpr size_t
+reduce_rule(set<bullet_rule<Lhs, set<Seen...>, Rhs...>, Rules...>,
+            set<AllRules...>) noexcept {
+  return idx_of<0, bullet_rule<Lhs, set<>, Seen...>, AllRules...>();
 }
 
 template <typename Lhs, typename... Seen, typename... Rhs, typename... Rules,
           typename... AllRules,
           typename std::enable_if<(sizeof...(Rhs) > 0), int>::type = 0>
-constexpr size_t reduce_rule(set<rule<Lhs, set<Seen...>, Rhs...>, Rules...>,
-                             set<AllRules...> rules) noexcept {
+constexpr size_t
+reduce_rule(set<bullet_rule<Lhs, set<Seen...>, Rhs...>, Rules...>,
+            set<AllRules...> rules) noexcept {
   return reduce_rule(set<Rules...>(), rules);
 }
 
@@ -620,7 +651,6 @@ constexpr void init_row_reduces(transition_table_row<AllSymbols...> &row,
     }
   } else {
     decltype(get_element<idx>(rules)) produce_rule;
-    std::cout << produce_rule << " RHS: " << sizeof_rhs(produce_rule) << '\n';
     for (size_t terminal_idx = 0; terminal_idx < sizeof...(Terminals);
          ++terminal_idx) {
       constexpr size_t produce_idx =
@@ -665,13 +695,13 @@ init_rows(transition_table<Start, set<Rules...>, set<Nonterminals...>,
           set<State, States...>, set<AllStates...> states, size_t row_idx) {
   init_row_gotos(table.rows[row_idx], State(), set<Nonterminals...>(), states);
   init_row_shifts(table.rows[row_idx], State(), set<Terminals...>(), states);
+  typename transition_table<Start, set<Rules...>, set<Nonterminals...>,
+                            set<Terminals...>>::rules rules;
   constexpr auto start_idx =
-      idx_of<0,
-             decltype(get_element<0>(
-                 with_lhs(std::declval<Start>(), set<Rules...>()))),
-             Rules...>();
+      idx_of<decltype(get_element<0>(
+                    with_lhs(std::declval<Start>(), rules)))>(rules);
   init_row_reduces<start_idx>(table.rows[row_idx], State(), set<Terminals...>(),
-                              set<Rules...>());
+                              rules);
   if constexpr (sizeof...(States) > 0) {
     init_rows(table, set<States...>(), states, row_idx + 1);
   }
