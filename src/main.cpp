@@ -42,6 +42,7 @@ struct T {
 
 struct id {
   int i = 0;
+  id() {}
   id(int i) : i(i) {}
   friend std::ostream &operator<<(std::ostream &stream, id const &i) {
     stream << i.i;
@@ -74,8 +75,7 @@ using terminals = set<id, lparen, rparen, plus, end>;
 using nonterminals = set<S, E, T>;
 
 class scanner {
-  transition_table<S, rules, nonterminals, terminals> table =
-      make_table(S(), rules(), nonterminals(), terminals());
+  transition_table<S, rules, nonterminals, terminals> table;
 
 public:
   bool parse(std::string_view input) {
@@ -121,7 +121,7 @@ public:
 };
 
 int main() {
-  auto table = make_table(S(), rules(), nonterminals(), terminals());
+  transition_table<S, rules, nonterminals, terminals> table;
   std::cout << '\n' << table << '\n';
 
   scanner scan;
