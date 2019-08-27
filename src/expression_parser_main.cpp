@@ -8,7 +8,7 @@ using namespace parser;
 
 struct id {
   int value = 0;
-  id() {}
+  id() = default;
   id(int value) : value(value) {}
   friend std::ostream &operator<<(std::ostream &stream, id const &i) {
     stream << i.value;
@@ -48,7 +48,7 @@ struct E;
 
 struct T {
   int value = 0;
-  T() {}
+  T() = default;
   T(lparen const &, E const & e, rparen const &);
   T(id const & i) : value(i.value) {}
   friend std::ostream &operator<<(std::ostream &stream, T const &) {
@@ -59,7 +59,7 @@ struct T {
 
 struct E {
   int value = 0;
-  E() {}
+  E() = default;
   E(T const & t) : value(t.value) {}
   E(E const & e, plus const &, T const & t) : value(e.value + t.value) {}
   friend std::ostream &operator<<(std::ostream &stream, E const &) {
@@ -72,7 +72,7 @@ T::T(lparen const &, E const & e, rparen const &) : value(e.value) {}
 
 struct S {
   int value = 0;
-  S() {}
+  S() = default;
   S(E const & e, end const &) : value(e.value) {}
   friend std::ostream &operator<<(std::ostream &stream, S const &) {
     stream << 'S';
