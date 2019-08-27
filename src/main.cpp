@@ -1,51 +1,17 @@
 #include <iostream>
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "parser.hpp"
 using namespace parser;
 
-struct S {
-  friend std::ostream &operator<<(std::ostream &stream, S const &) {
-    stream << 'S';
-    return stream;
-  }
-};
-
-struct E {
-  friend std::ostream &operator<<(std::ostream &stream, E const &) {
-    stream << 'E';
-    return stream;
-  }
-};
-
-struct end {
-  friend std::ostream &operator<<(std::ostream &stream, end const &) {
-    stream << '$';
-    return stream;
-  }
-};
-
-struct plus {
-  friend std::ostream &operator<<(std::ostream &stream, plus const &) {
-    stream << '+';
-    return stream;
-  }
-};
-
-struct T {
-  friend std::ostream &operator<<(std::ostream &stream, T const &) {
-    stream << 'T';
-    return stream;
-  }
-};
-
 struct id {
-  int i = 0;
+  int value = 0;
   id() {}
-  id(int i) : i(i) {}
+  id(int value) : value(value) {}
   friend std::ostream &operator<<(std::ostream &stream, id const &i) {
-    stream << i.i;
+    stream << i.value;
     return stream;
   }
 };
@@ -64,6 +30,56 @@ struct rparen {
   }
 };
 
+struct plus {
+  friend std::ostream &operator<<(std::ostream &stream, plus const &) {
+    stream << '+';
+    return stream;
+  }
+};
+
+struct end {
+  friend std::ostream &operator<<(std::ostream &stream, end const &) {
+    stream << '$';
+    return stream;
+  }
+};
+
+struct E;
+
+struct T {
+  int value = 0;
+  T() {}
+  T(lparen const &, E const & e, rparen const &);
+  T(id const & i) : value(i.value) {}
+  friend std::ostream &operator<<(std::ostream &stream, T const &) {
+    stream << 'T';
+    return stream;
+  }
+};
+
+struct E {
+  int value = 0;
+  E() {}
+  E(T const & t) : value(t.value) {}
+  E(E const & e, plus const &, T const & t) : value(e.value + t.value) {}
+  friend std::ostream &operator<<(std::ostream &stream, E const &) {
+    stream << 'E';
+    return stream;
+  }
+};
+
+T::T(lparen const &, E const & e, rparen const &) : value(e.value) {}
+
+struct S {
+  int value = 0;
+  S() {}
+  S(E const & e, end const &) : value(e.value) {}
+  friend std::ostream &operator<<(std::ostream &stream, S const &) {
+    stream << 'S';
+    return stream;
+  }
+};
+
 using rule1 = rule<S, E, end>;
 using rule2 = rule<E, E, plus, T>;
 using rule3 = rule<E, T>;
@@ -78,10 +94,15 @@ class scanner {
   transition_table<S, rules, nonterminals, terminals> table;
 
 public:
-  bool parse(std::string_view input) {
+  std::optional<int> parse(std::string_view input) {
     while (!input.empty()) {
       try {
         switch (input[0]) {
+        case ' ':
+        case '\t':
+        case '\f':
+        case '\v':
+          break;
         case '0':
         case '1':
         case '2':
@@ -104,19 +125,19 @@ public:
           table.read_token(rparen());
           break;
         default:
-          return false;
+          return {};
         }
       } catch (...) {
-        return false;
+        return {};
       }
       input = input.substr(1);
     }
     try {
       table.read_token(end());
     } catch (...) {
-      return false;
+      return {};
     }
-    return true;
+    return {table.get_parse_result().value};
   }
 };
 
@@ -126,8 +147,11 @@ int main() {
 
   scanner scan;
   using namespace std::literals::string_view_literals;
-  bool success = scan.parse("3+(1)+4+5+(5+2)+1"sv);
+  if (auto result = scan.parse("4 + (5)"sv); result) {
+    std::cout << "Parsing successful: " << *result << '\n';
+  } else {
+    std::cout << "Parsing failed\n";
+  }
 
-  std::cout << "Success: " << (success? "true": "false") << '\n';
   return 0;
 }

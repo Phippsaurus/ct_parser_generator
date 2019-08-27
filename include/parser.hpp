@@ -33,8 +33,7 @@ template <size_t Idx, typename T, typename... Ts,
 constexpr auto get_element(set<T, Ts...>) noexcept
     -> decltype(get_element<Idx - 1>(set<Ts...>()));
 
-template <typename Lhs, typename Seen, typename... Rhs> struct bullet_rule {
-};
+template <typename Lhs, typename Seen, typename... Rhs> struct bullet_rule {};
 
 template <typename Lhs, typename... Seen, typename... Rhs>
 constexpr auto lhs(bullet_rule<Lhs, set<Seen...>, Rhs...>) noexcept -> Lhs;
@@ -100,7 +99,8 @@ template <typename Element, typename... Ts> struct add_t {
                              set<Ts..., Element>>::type;
 };
 
-template <typename... Ts> constexpr auto join(set<Ts...>, set<>) noexcept -> set<Ts...> {
+template <typename... Ts>
+constexpr auto join(set<Ts...>, set<>) noexcept -> set<Ts...> {
   return {};
 }
 
@@ -112,7 +112,8 @@ constexpr auto join(set<Ts...>, set<U, Us...>) noexcept
 }
 
 template <typename Lhs, typename... Seen, typename First, typename... Rhs>
-constexpr auto first(bullet_rule<Lhs, set<Seen...>, First, Rhs...>) noexcept -> First;
+constexpr auto first(bullet_rule<Lhs, set<Seen...>, First, Rhs...>) noexcept
+    -> First;
 
 template <typename Nonterminal>
 constexpr auto with_lhs(Nonterminal nonterminal, set<>) noexcept -> set<>;
@@ -121,8 +122,9 @@ template <typename Nonterminal, typename Lhs, typename... Seen, typename... Rhs,
           typename... Rules,
           typename std::enable_if<std::is_same<Nonterminal, Lhs>::value,
                                   int>::type = 0>
-constexpr auto with_lhs(Nonterminal nonterminal,
-                        set<bullet_rule<Lhs, set<Seen...>, Rhs...>, Rules...>) noexcept
+constexpr auto
+with_lhs(Nonterminal nonterminal,
+         set<bullet_rule<Lhs, set<Seen...>, Rhs...>, Rules...>) noexcept
     -> decltype(prepend(bullet_rule<Lhs, set<Seen...>, Rhs...>(),
                         with_lhs(nonterminal, set<Rules...>())));
 
@@ -130,8 +132,9 @@ template <typename Nonterminal, typename Lhs, typename... Seen, typename... Rhs,
           typename... Rules,
           typename std::enable_if<!std::is_same<Nonterminal, Lhs>::value,
                                   int>::type = 0>
-constexpr auto with_lhs(Nonterminal nonterminal,
-                        set<bullet_rule<Lhs, set<Seen...>, Rhs...>, Rules...>) noexcept
+constexpr auto
+with_lhs(Nonterminal nonterminal,
+         set<bullet_rule<Lhs, set<Seen...>, Rhs...>, Rules...>) noexcept
     -> decltype(with_lhs(nonterminal, set<Rules...>()));
 
 template <typename Lhs, typename... Seen, typename FirstRhs, typename... Rhs,
@@ -139,7 +142,8 @@ template <typename Lhs, typename... Seen, typename FirstRhs, typename... Rhs,
           typename std::enable_if<contains_t<FirstRhs, Nonterminals...>::value,
                                   int>::type = 0>
 constexpr auto expand(bullet_rule<Lhs, set<Seen...>, FirstRhs, Rhs...>,
-                      set<Rules...> rules, set<Nonterminals...> nonterminals) noexcept
+                      set<Rules...> rules,
+                      set<Nonterminals...> nonterminals) noexcept
     -> decltype(with_lhs(std::declval<FirstRhs>(), rules));
 
 template <typename Lhs, typename... Seen, typename FirstRhs, typename... Rhs,
@@ -148,7 +152,8 @@ template <typename Lhs, typename... Seen, typename FirstRhs, typename... Rhs,
                                   int>::type = 0>
 constexpr auto
 expand(bullet_rule<Lhs, set<Seen...>, FirstRhs, Rhs...> bullet_rule,
-       set<Rules...> rules, set<Nonterminals...> nonterminals) noexcept -> set<>;
+       set<Rules...> rules, set<Nonterminals...> nonterminals) noexcept
+    -> set<>;
 
 template <typename... AllRules, typename... Nonterminals>
 constexpr auto closures(set<>, set<AllRules...>, set<Nonterminals...>) -> set<>;
@@ -318,6 +323,7 @@ struct action {
   action_type type = action_type::Unreachable;
   size_t idx = 0;
   size_t pop_nr = 0;
+  size_t produce_fn = 0;
   friend std::ostream &operator<<(std::ostream &stream, action const &a) {
     switch (a.type) {
     case action_type::Unreachable:
@@ -499,12 +505,12 @@ constexpr action init_reduce(set<State...> state, set<AllSymbols...>,
                              set<Rules...> rules, Symbol) noexcept {
   constexpr size_t idx = reduce_rule(state, rules);
   if constexpr (idx == AcceptIdx) {
-    return {action_type::Accept};
+    return {action_type::Accept, 0, 0, idx};
   } else {
     decltype(get_element<idx>(rules)) produce_rule;
     constexpr size_t produce_idx =
         idx_of<0, decltype(lhs(produce_rule)), AllSymbols...>();
-    return action{action_type::Reduce, produce_idx, sizeof_rhs(produce_rule)};
+    return action{action_type::Reduce, produce_idx, sizeof_rhs(produce_rule), idx};
   }
 }
 
@@ -574,17 +580,39 @@ init_row(set<State...> state, set<AllSymbols...> symbols,
 }
 
 template <typename Start, typename... Rules, typename... Nonterminals,
-          typename... Terminals,
-          typename... AllStates>
-constexpr auto
-init_rows(Start, set<Rules...> rules, set<Nonterminals...>,
-                           set<Terminals...>,
-          set<AllStates...>) noexcept ->
-  std::array<transition_table_row<Terminals..., Nonterminals...>,
-             set<AllStates...>::num_elements> {
-  return {init_row<idx_of<decltype(get_element<0>(with_lhs(std::declval<Start>(), rules)))>(
-          rules)>(AllStates(), set<Terminals..., Nonterminals...>(),
-      set<Nonterminals...>(), set<AllStates...>(), rules)...};
+          typename... Terminals, typename... AllStates>
+constexpr auto init_rows(Start, set<Rules...> rules, set<Nonterminals...>,
+                         set<Terminals...>, set<AllStates...>) noexcept
+    -> std::array<transition_table_row<Terminals..., Nonterminals...>,
+                  set<AllStates...>::num_elements> {
+  return {init_row<idx_of<decltype(
+      get_element<0>(with_lhs(std::declval<Start>(), rules)))>(rules)>(
+      AllStates(), set<Terminals..., Nonterminals...>(), set<Nonterminals...>(),
+      set<AllStates...>(), rules)...};
+}
+
+template <typename Symbols, typename Lhs, typename... Rhs>
+constexpr void update_nonterminal(Symbols &symbols) {
+  std::get<Lhs>(symbols) =
+      Lhs((std::get<Rhs>(symbols))...);
+  std::cout << Lhs() << ' ' << std::get<Lhs>(symbols).value << '\n';
+}
+
+template <typename... Symbols> using update_fn = void (*)(std::tuple<Symbols...> &);
+
+template <typename Lhs, typename... Rhs, typename... Symbols>
+constexpr update_fn<Symbols...> init_update_fn(rule<Lhs, Rhs...>,
+                                               set<Symbols...>) noexcept {
+  return &update_nonterminal<std::tuple<Symbols...>, Lhs, Rhs...>;
+}
+
+template <typename... Symbols>
+constexpr auto make_update_fn(set<Symbols...>) -> update_fn<Symbols...>;
+
+template <typename... Rules, typename... Symbols>
+constexpr std::array<update_fn<Symbols...>, sizeof...(Rules)>
+init_update_fns(set<Rules...>, set<Symbols...> symbols) noexcept {
+  return {init_update_fn(Rules(), symbols)...};
 }
 
 template <typename Start, typename Rules, typename Nonterminals,
@@ -594,27 +622,34 @@ struct transition_table {
   using states = decltype(
       make_states(std::declval<Start>(), rules(), Nonterminals(), Terminals()));
   using symbols = decltype(join(Terminals(), Nonterminals()));
+
   const std::array<decltype(make_row(Terminals(), Nonterminals())),
-             states::num_elements>
+                   states::num_elements>
       rows = init_rows(Start(), rules(), Nonterminals(), Terminals(), states());
+
+  const std::array<decltype(make_update_fn(symbols())), rules::num_elements>
+      update_functions =
+          init_update_fns(Rules(), join(Terminals(), Nonterminals()));
+
   decltype(to_tuple(symbols())) store{};
   std::vector<size_t> stack{0};
 
   template <typename Token> bool read_token(Token const &token) {
-    std::cout << "Read " << token << '\n';
     std::get<idx_of(token, Terminals())>(store) = token;
     size_t action_idx = idx_of(token, Terminals());
     while (true) {
-      auto &act = rows[stack.back()].actions[action_idx];
+      action const &act = rows[stack.back()].actions[action_idx];
       std::cout << "Action idx: " << action_idx << ", Stack: " << stack << '\n';
       switch (act.type) {
       case action_type::Shift:
+        std::cout << "Read " << token << '\n';
         std::cout << "State " << stack.back() << ", Shift " << act.idx << '\n';
         stack.push_back(act.idx);
         return false;
       case action_type::Reduce: {
         std::cout << "State " << stack.back() << ", Reduce " << act.pop_nr
                   << " states\n";
+        (update_functions[act.produce_fn])(store);
         stack.erase(stack.end() - act.pop_nr, stack.end());
         action_idx = act.idx;
         continue;
@@ -631,6 +666,15 @@ struct transition_table {
       default:
         throw std::runtime_error{"Invalid input token"};
       }
+    }
+  }
+
+  Start const &get_parse_result() {
+    if (rows[stack.back()].actions[0].type == action_type::Accept) {
+      (update_functions[rows[stack.back()].actions[0].produce_fn])(store);
+      return std::get<Start>(store);
+    } else {
+      throw std::runtime_error{"Parse result not available yet"};
     }
   }
 
