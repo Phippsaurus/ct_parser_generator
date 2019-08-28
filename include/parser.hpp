@@ -460,7 +460,7 @@ constexpr size_t idx_from_prefix() noexcept {
 template <typename... State, typename... Nonterminals, typename... States,
           typename Symbol>
 constexpr action init_nonterminal(set<State...> state, set<Nonterminals...>,
-                                  set<States...>, Symbol) noexcept {
+                                  set<States...>, set<Symbol>) noexcept {
   if constexpr (!std::is_same<decltype(go_to(std::declval<Symbol>(), state)),
                               set<>>::value) {
     return action{
@@ -504,9 +504,9 @@ reduce_rule(set<bullet_rule<Lhs, set<Seen...>, Rhs...>, Rules...>,
 }
 
 template <size_t AcceptIdx, typename... State, typename... AllSymbols,
-          typename... States, typename... Rules, typename Symbol>
+          typename... States, typename... Rules>
 constexpr action init_reduce(set<State...> state, set<AllSymbols...>,
-                             set<Rules...> rules, Symbol) noexcept {
+                             set<Rules...> rules) noexcept {
   constexpr size_t idx = reduce_rule(state, rules);
   if constexpr (idx == AcceptIdx) {
     return {action_type::Accept, 0, 0, idx};
@@ -514,17 +514,20 @@ constexpr action init_reduce(set<State...> state, set<AllSymbols...>,
     decltype(get_element<idx>(rules)) produce_rule;
     constexpr size_t produce_idx =
         idx_of<0, decltype(lhs(produce_rule)), AllSymbols...>();
-    return action{action_type::Reduce, produce_idx, sizeof_rhs(produce_rule), idx};
+    return action{action_type::Reduce, produce_idx, sizeof_rhs(produce_rule),
+                  idx};
   }
 }
 
 template <typename... State, typename... States, typename Symbol>
 constexpr action init_shift(set<State...> state, set<States...>,
-                            Symbol symbol) noexcept {
-  if constexpr (!std::is_same<decltype(go_to(symbol, state)), set<>>::value) {
+                            set<Symbol>) noexcept {
+  if constexpr (!std::is_same<decltype(go_to(std::declval<Symbol>(), state)),
+                              set<>>::value) {
     return action{
         action_type::Shift,
-        idx_from_prefix<0, decltype(go_to(symbol, state)), States...>()};
+        idx_from_prefix<0, decltype(go_to(std::declval<Symbol>(), state)),
+                        States...>()};
   } else {
     return {action_type::Unreachable};
   }
@@ -536,8 +539,8 @@ template <
     typename std::enable_if<contains_reduce(set<State...>()), int>::type = 0>
 constexpr action init_terminal(set<State...> state, set<AllSymbols...> symbols,
                                set<States...>, set<Rules...> rules,
-                               Symbol symbol) noexcept {
-  return init_reduce<AcceptIdx>(state, symbols, rules, symbol);
+                               set<Symbol>) noexcept {
+  return init_reduce<AcceptIdx>(state, symbols, rules);
 }
 
 template <
@@ -546,7 +549,7 @@ template <
     typename std::enable_if<!contains_reduce(set<State...>()), int>::type = 0>
 constexpr action init_terminal(set<State...> state, set<AllSymbols...>,
                                set<States...> states, set<Rules...>,
-                               Symbol symbol) noexcept {
+                               set<Symbol> symbol) noexcept {
   return init_shift(state, states, symbol);
 }
 
@@ -558,7 +561,7 @@ template <size_t AcceptIdx, typename... State, typename... AllSymbols,
 constexpr action init_action(set<State...> state, set<AllSymbols...>,
                              set<Nonterminals...> nonterminals,
                              set<States...> states, set<Rules...>,
-                             Symbol symbol) noexcept {
+                             set<Symbol> symbol) noexcept {
   return init_nonterminal(state, nonterminals, states, symbol);
 }
 
@@ -569,7 +572,7 @@ template <size_t AcceptIdx, typename... State, typename... AllSymbols,
                                   int>::type = 0>
 constexpr action init_action(set<State...> state, set<AllSymbols...> symbols,
                              set<Nonterminals...>, set<States...> states,
-                             set<Rules...> rules, Symbol symbol) noexcept {
+                             set<Rules...> rules, set<Symbol> symbol) noexcept {
   return init_terminal<AcceptIdx>(state, symbols, states, rules, symbol);
 }
 
@@ -580,12 +583,12 @@ init_row(set<State...> state, set<AllSymbols...> symbols,
          set<Nonterminals...> nonterminals, set<States...> states,
          set<Rules...> rules) noexcept {
   return {init_action<AcceptIdx>(state, symbols, nonterminals, states, rules,
-                                 AllSymbols())...};
+                                 set<AllSymbols>())...};
 }
 
 template <typename Start, typename... Rules, typename... Nonterminals,
           typename... Terminals, typename... AllStates>
-constexpr auto init_rows(Start, set<Rules...> rules, set<Nonterminals...>,
+constexpr auto init_rows(set<Start>, set<Rules...> rules, set<Nonterminals...>,
                          set<Terminals...>, set<AllStates...>) noexcept
     -> std::array<transition_table_row<Terminals..., Nonterminals...>,
                   set<AllStates...>::num_elements> {
@@ -598,16 +601,17 @@ constexpr auto init_rows(Start, set<Rules...> rules, set<Nonterminals...>,
 template <typename Symbols, typename Lhs, typename... Rhs>
 constexpr void eval_nonterminal(Symbols &symbols) {
   auto args_iter = symbols.end() - sizeof...(Rhs);
-  Lhs nonterminal{(get<Rhs>(*args_iter++))...};
+  Lhs nonterminal{(get<Rhs>(std::move(*args_iter++)))...};
   symbols.erase(symbols.end() - sizeof...(Rhs), symbols.end());
   symbols.emplace_back(std::move(nonterminal));
 }
 
-template <typename... Symbols> using eval_fn = void (*)(std::vector<std::variant<Symbols...>> &);
+template <typename... Symbols>
+using eval_fn = void (*)(std::vector<std::variant<Symbols...>> &);
 
 template <typename Lhs, typename... Rhs, typename... Symbols>
 constexpr eval_fn<Symbols...> init_eval_fn(rule<Lhs, Rhs...>,
-                                               set<Symbols...>) noexcept {
+                                           set<Symbols...>) noexcept {
   return &eval_nonterminal<std::vector<std::variant<Symbols...>>, Lhs, Rhs...>;
 }
 
@@ -630,7 +634,8 @@ struct transition_table {
 
   const std::array<decltype(make_row(Terminals(), Nonterminals())),
                    states::num_elements>
-      rows = init_rows(Start(), rules(), Nonterminals(), Terminals(), states());
+      rows = init_rows(set<Start>(), rules(), Nonterminals(), Terminals(),
+                       states());
 
   const std::array<decltype(make_eval_fn(symbols())), rules::num_elements>
       eval_functions =
@@ -662,7 +667,7 @@ struct transition_table {
       case action_type::Accept:
         return true;
       default:
-        throw std::runtime_error{"Invalid input token"};
+        throw std::runtime_error("Invalid input token");
       }
     }
   }

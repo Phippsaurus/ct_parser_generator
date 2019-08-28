@@ -8,7 +8,6 @@ using namespace parser;
 
 struct id {
   int value = 0;
-  id() = default;
   id(int value) : value(value) {}
   friend std::ostream &operator<<(std::ostream &stream, id const &i) {
     stream << i.value;
@@ -37,6 +36,13 @@ struct plus {
   }
 };
 
+struct times {
+  friend std::ostream &operator<<(std::ostream &stream, times const &) {
+    stream << '*';
+    return stream;
+  }
+};
+
 struct end {
   friend std::ostream &operator<<(std::ostream &stream, end const &) {
     stream << '$';
@@ -48,9 +54,8 @@ struct E;
 
 struct T {
   int value = 0;
-  T() = default;
-  T(lparen const &, E const & e, rparen const &);
-  T(id const & i) : value(i.value) {}
+  T(lparen, E &&e, rparen);
+  T(id &&i) : value(i.value) {}
   friend std::ostream &operator<<(std::ostream &stream, T const &) {
     stream << 'T';
     return stream;
@@ -59,21 +64,20 @@ struct T {
 
 struct E {
   int value = 0;
-  E() = default;
-  E(T const & t) : value(t.value) {}
-  E(E const & e, plus const &, T const & t) : value(e.value + t.value) {}
+  E(T &&p) : value(p.value) {}
+  E(E &&e, plus, T &&p) : value(e.value + p.value) {}
+  E(E &&e, times, T &&p) : value(e.value * p.value) {}
   friend std::ostream &operator<<(std::ostream &stream, E const &) {
     stream << 'E';
     return stream;
   }
 };
 
-T::T(lparen const &, E const & e, rparen const &) : value(e.value) {}
+T::T(lparen, E &&e, rparen) : value(e.value) {}
 
 struct S {
   int value = 0;
-  S() = default;
-  S(E const & e, end const &) : value(e.value) {}
+  S(E &&e, end) : value(e.value) {}
   friend std::ostream &operator<<(std::ostream &stream, S const &) {
     stream << 'S';
     return stream;
@@ -82,12 +86,13 @@ struct S {
 
 using rule1 = rule<S, E, end>;
 using rule2 = rule<E, E, plus, T>;
-using rule3 = rule<E, T>;
 using rule4 = rule<T, id>;
-using rule5 = rule<T, lparen, E, rparen>;
+using rule5 = rule<E, E, times, T>;
+using rule6 = rule<T, lparen, E, rparen>;
+using rule7 = rule<E, T>;
 
-using rules = set<rule1, rule2, rule3, rule4, rule5>;
-using terminals = set<id, lparen, rparen, plus, end>;
+using rules = set<rule1, rule2, rule4, rule5, rule6, rule7>;
+using terminals = set<id, lparen, rparen, plus, times, end>;
 using nonterminals = set<S, E, T>;
 
 class scanner {
@@ -117,6 +122,9 @@ public:
           break;
         case '+':
           table.read_token(plus());
+          break;
+        case '*':
+          table.read_token(times());
           break;
         case '(':
           table.read_token(lparen());
@@ -149,7 +157,7 @@ int main() {
 
   scanner scan;
   using namespace std::literals::string_view_literals;
-  if (auto result = scan.parse("1 + (3 + 2) + (9) + 4"sv); result) {
+  if (auto result = scan.parse("3 * 7"sv); result) {
     std::cout << "Parsing successful: " << *result << '\n';
   } else {
     std::cout << "Parsing failed\n";
