@@ -3,6 +3,7 @@
 
 #include <array>
 #include <iostream>
+#include <memory>
 #include <tuple>
 #include <type_traits>
 #include <utility>
@@ -64,36 +65,36 @@ template <typename Element, typename... T> struct contains_t {
 template <
     typename Element, typename... Ts,
     typename std::enable_if<contains_t<Element, Ts...>::value, int>::type = 0>
-constexpr auto add(set<Ts...>, Element) noexcept -> set<Ts...>;
+constexpr auto add(set<Ts...>, Element const &) noexcept -> set<Ts...>;
 
 template <
     typename Element, typename... Ts,
     typename std::enable_if<!contains_t<Element, Ts...>::value, int>::type = 0>
-constexpr auto add(set<Ts...>, Element) noexcept -> set<Ts..., Element>;
+constexpr auto add(set<Ts...>, Element const &) noexcept -> set<Ts..., Element>;
 
 template <
     typename Element, typename... Ts,
     typename std::enable_if<contains_t<Element, Ts...>::value, int>::type = 0>
-constexpr auto prepend(Element, set<Ts...>) noexcept -> set<Ts...>;
+constexpr auto prepend(Element const &, set<Ts...>) noexcept -> set<Ts...>;
 
 template <
     typename Element, typename... Ts,
     typename std::enable_if<!contains_t<Element, Ts...>::value, int>::type = 0>
-constexpr auto prepend(Element, set<Ts...>) noexcept -> set<Element, Ts...>;
+constexpr auto prepend(Element const &, set<Ts...>) noexcept -> set<Element, Ts...>;
 
 template <typename Element>
-constexpr auto remove(set<>, Element element) noexcept -> set<>;
+constexpr auto remove(set<>, Element const &element) noexcept -> set<>;
 
 template <
     typename Element, typename T, typename... Ts,
     typename std::enable_if<!std::is_same<Element, T>::value, int>::type = 0>
-constexpr auto remove(set<T, Ts...>, Element element) noexcept
+constexpr auto remove(set<T, Ts...>, Element const &element) noexcept
     -> decltype(prepend(std::declval<T>(), remove(set<Ts...>(), element)));
 
 template <
     typename Element, typename T, typename... Ts,
     typename std::enable_if<std::is_same<Element, T>::value, int>::type = 0>
-constexpr auto remove(set<T, Ts...>, Element) noexcept -> set<Ts...>;
+constexpr auto remove(set<T, Ts...>, Element const &) noexcept -> set<Ts...>;
 
 template <typename Element, typename... Ts> struct add_t {
   using type = typename if_t<contains_t<Element, Ts...>::value, set<Ts...>,
@@ -117,14 +118,14 @@ constexpr auto first(bullet_rule<Lhs, set<Seen...>, First, Rhs...>) noexcept
     -> First;
 
 template <typename Nonterminal>
-constexpr auto with_lhs(Nonterminal nonterminal, set<>) noexcept -> set<>;
+constexpr auto with_lhs(Nonterminal const &nonterminal, set<>) noexcept -> set<>;
 
 template <typename Nonterminal, typename Lhs, typename... Seen, typename... Rhs,
           typename... Rules,
           typename std::enable_if<std::is_same<Nonterminal, Lhs>::value,
                                   int>::type = 0>
 constexpr auto
-with_lhs(Nonterminal nonterminal,
+with_lhs(Nonterminal const &nonterminal,
          set<bullet_rule<Lhs, set<Seen...>, Rhs...>, Rules...>) noexcept
     -> decltype(prepend(bullet_rule<Lhs, set<Seen...>, Rhs...>(),
                         with_lhs(nonterminal, set<Rules...>())));
@@ -134,7 +135,7 @@ template <typename Nonterminal, typename Lhs, typename... Seen, typename... Rhs,
           typename std::enable_if<!std::is_same<Nonterminal, Lhs>::value,
                                   int>::type = 0>
 constexpr auto
-with_lhs(Nonterminal nonterminal,
+with_lhs(Nonterminal const &nonterminal,
          set<bullet_rule<Lhs, set<Seen...>, Rhs...>, Rules...>) noexcept
     -> decltype(with_lhs(nonterminal, set<Rules...>()));
 
@@ -199,7 +200,7 @@ constexpr auto closures(set<bullet_rule<Lhs, set<Seen...>, Rhs...>, Rules...>,
 template <typename Nonterminal, typename... Rules, typename... Nonterminals,
           typename std::enable_if<
               contains_t<Nonterminal, Nonterminals...>::value, int>::type = 1>
-constexpr auto closure(Nonterminal nonterminal, set<Rules...> rules,
+constexpr auto closure(Nonterminal const &nonterminal, set<Rules...> rules,
                        set<Nonterminals...> nonterminals) noexcept
     -> decltype(closures(with_lhs(nonterminal, set<Rules...>()), rules,
                          remove(nonterminals, nonterminal)));
@@ -207,13 +208,13 @@ constexpr auto closure(Nonterminal nonterminal, set<Rules...> rules,
 template <typename Nonterminal, typename... Rules, typename... Nonterminals,
           typename std::enable_if<
               !contains_t<Nonterminal, Nonterminals...>::value, int>::type = 1>
-constexpr auto closure(Nonterminal nonterminal, set<Rules...>,
+constexpr auto closure(Nonterminal const &nonterminal, set<Rules...>,
                        set<Nonterminals...>) noexcept -> set<>;
 
-template <typename Symbol> constexpr auto go_to(Symbol symbol, set<>) -> set<>;
+template <typename Symbol> constexpr auto go_to(Symbol const &symbol, set<>) -> set<>;
 
 template <typename Symbol, typename Lhs, typename... Seen, typename... Rules>
-constexpr auto go_to(Symbol symbol,
+constexpr auto go_to(Symbol const &symbol,
                      set<bullet_rule<Lhs, set<Seen...>>, Rules...>) noexcept
     -> decltype(go_to(symbol, set<Rules...>()));
 
@@ -222,7 +223,7 @@ template <typename Symbol, typename Lhs, typename... Seen, typename FirstRhs,
           typename std::enable_if<!std::is_same<FirstRhs, Symbol>::value,
                                   int>::type = 0>
 constexpr auto
-go_to(Symbol symbol,
+go_to(Symbol const &symbol,
       set<bullet_rule<Lhs, set<Seen...>, FirstRhs, Rhs...>, Rules...>) noexcept
     -> decltype(go_to(symbol, set<Rules...>()));
 
@@ -231,13 +232,13 @@ template <typename Symbol, typename Lhs, typename... Seen, typename FirstRhs,
           typename std::enable_if<std::is_same<FirstRhs, Symbol>::value,
                                   int>::type = 0>
 constexpr auto
-go_to(Symbol symbol,
+go_to(Symbol const &symbol,
       set<bullet_rule<Lhs, set<Seen...>, FirstRhs, Rhs...>, Rules...>)
     -> decltype(prepend(bullet_rule<Lhs, set<Seen..., FirstRhs>, Rhs...>(),
                         go_to(symbol, set<Rules...>())));
 
 template <typename... Nonterminals, typename... Rules, typename... AllRules>
-constexpr auto go_tos(set<>, set<Nonterminals...> all_symbols,
+constexpr auto go_tos(set<>, set<Nonterminals...> nonterminals,
                       set<Rules...> rules, set<AllRules...>) noexcept -> set<>;
 
 template <
@@ -250,7 +251,7 @@ template <
 constexpr auto go_tos(set<Symbol, Symbols...>,
                       set<Nonterminals...> nonterminals, set<Rules...> state,
                       set<AllRules...> all_rules) noexcept
-    -> decltype(go_tos(set<Symbols...>(), nonterminals, state, all_rules));
+     -> decltype(go_tos(set<Symbols...>(), nonterminals, state, all_rules));
 
 template <
     typename Symbol, typename... Symbols, typename... Nonterminals,
@@ -306,11 +307,11 @@ constexpr auto add_state(set<Rules...> state, set<States...> states,
 
 template <typename Start, typename... Rules, typename... Nonterminals,
           typename... Terminals>
-constexpr auto make_states(Start start_symbol, set<Rules...> rules,
+constexpr auto make_states(Start const &start_symbol, set<Rules...> rules,
                            set<Nonterminals...> nonterminals,
                            set<Terminals...> terminals) noexcept
     -> decltype(add_state(closure(start_symbol, rules, nonterminals), set<>(),
-                          rules, join(nonterminals, terminals), nonterminals));
+                         rules, join(nonterminals, terminals), nonterminals));
 
 enum class action_type {
   Unreachable,
@@ -598,21 +599,25 @@ constexpr auto init_rows(set<Start>, set<Rules...> rules, set<Nonterminals...>,
       set<AllStates...>(), rules)...};
 }
 
+struct symbol {
+  virtual ~symbol() {}
+};
+
 template <typename Symbols, typename Lhs, typename... Rhs>
 constexpr void eval_nonterminal(Symbols &symbols) {
   auto args_iter = symbols.end() - sizeof...(Rhs);
-  Lhs nonterminal{(get<Rhs>(std::move(*args_iter++)))...};
+  Lhs *nonterminal = new Lhs{(std::move(*dynamic_cast<Rhs *>(*args_iter++)))...};
   symbols.erase(symbols.end() - sizeof...(Rhs), symbols.end());
-  symbols.emplace_back(std::move(nonterminal));
+  symbols.push_back(nonterminal);
 }
 
 template <typename... Symbols>
-using eval_fn = void (*)(std::vector<std::variant<Symbols...>> &);
+using eval_fn = void (*)(std::vector<symbol *> &);
 
 template <typename Lhs, typename... Rhs, typename... Symbols>
 constexpr eval_fn<Symbols...> init_eval_fn(rule<Lhs, Rhs...>,
                                            set<Symbols...>) noexcept {
-  return &eval_nonterminal<std::vector<std::variant<Symbols...>>, Lhs, Rhs...>;
+  return &eval_nonterminal<std::vector<symbol *>, Lhs, Rhs...>;
 }
 
 template <typename... Symbols>
@@ -642,7 +647,7 @@ struct transition_table {
           init_eval_fns(Rules(), join(Terminals(), Nonterminals()));
 
   std::vector<size_t> stack{0};
-  std::vector<decltype(to_variant(symbols()))> values{0};
+  std::vector<symbol *> values{0};
 
   template <typename Token> bool read_token(Token &&token) {
     size_t action_idx = idx_of(token, Terminals());
@@ -651,7 +656,7 @@ struct transition_table {
       switch (act.type) {
       case action_type::Shift:
         stack.push_back(act.idx);
-        values.emplace_back(std::move(token));
+        values.emplace_back(new Token(std::move(token)));
         return false;
       case action_type::Reduce: {
         (eval_functions[act.produce_fn])(values);
@@ -675,7 +680,7 @@ struct transition_table {
   Start const &get_parse_result() {
     if (rows[stack.back()].actions[0].type == action_type::Accept) {
       (eval_functions[rows[stack.back()].actions[0].produce_fn])(values);
-      return std::get<Start>(values.back());
+      return *dynamic_cast<Start *>(values.back());
     } else {
       throw std::runtime_error{"Parse result not available yet"};
     }

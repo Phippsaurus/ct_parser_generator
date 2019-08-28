@@ -31,4 +31,6 @@ make -C build/debug
 ## TODOs
 
 - [ ] Implement full IELR to parse more complex grammars
-- [ ] Add `JSON` parser example
+- [X] Add `JSON` parser example
+- [ ] Switch between `std::variant` and `symbol *` base class pointer,
+  depending on which is applicable / more performant
