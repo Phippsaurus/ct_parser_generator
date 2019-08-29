@@ -6,10 +6,23 @@ A project to teach myself how parsers work in detail, and how to use the full
 power of _C++_ constant evaluation. The transition table is generated through
 template magic at compile time, so there is no extra generator necessary.
 
-[main](./src/main.cpp) contains an example implementation that uses the parser
-for the classic example of a language of parenthesized addition.
+### Trivial symbol types
 
-## Building
+The [expression parser](./src/expression_parser_main.cpp) contains an example
+implementation that uses the parser for the classic example of a language of
+parenthesized addition. All symbols are trivially constructible and can be
+collected in a variant which provides the best performance.
+
+### Complex symbol types
+
+The [json parser](./src/json_parser_main.cpp) represents the different JSON
+value types through a common base class, which is necessary to represent
+recursive types.  The use of `std::unique_ptr` prohibits collecting the symbols
+into one `std::variant`, so indirection through a common base class is
+required. This is less performant, but more flexible.  If all symbol types
+inherit from `symbol`, this parser variant is constructed.
+
+# Building
 
 To build the project in debug configuration.
 
@@ -32,5 +45,5 @@ make -C build/debug
 
 - [ ] Implement full IELR to parse more complex grammars
 - [X] Add `JSON` parser example
-- [ ] Switch between `std::variant` and `symbol *` base class pointer,
+- [X] Switch between `std::variant` and `symbol *` base class pointer,
   depending on which is applicable / more performant

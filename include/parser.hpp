@@ -80,7 +80,8 @@ constexpr auto prepend(Element const &, set<Ts...>) noexcept -> set<Ts...>;
 template <
     typename Element, typename... Ts,
     typename std::enable_if<!contains_t<Element, Ts...>::value, int>::type = 0>
-constexpr auto prepend(Element const &, set<Ts...>) noexcept -> set<Element, Ts...>;
+constexpr auto prepend(Element const &, set<Ts...>) noexcept
+    -> set<Element, Ts...>;
 
 template <typename Element>
 constexpr auto remove(set<>, Element const &element) noexcept -> set<>;
@@ -118,7 +119,8 @@ constexpr auto first(bullet_rule<Lhs, set<Seen...>, First, Rhs...>) noexcept
     -> First;
 
 template <typename Nonterminal>
-constexpr auto with_lhs(Nonterminal const &nonterminal, set<>) noexcept -> set<>;
+constexpr auto with_lhs(Nonterminal const &nonterminal, set<>) noexcept
+    -> set<>;
 
 template <typename Nonterminal, typename Lhs, typename... Seen, typename... Rhs,
           typename... Rules,
@@ -211,7 +213,8 @@ template <typename Nonterminal, typename... Rules, typename... Nonterminals,
 constexpr auto closure(Nonterminal const &nonterminal, set<Rules...>,
                        set<Nonterminals...>) noexcept -> set<>;
 
-template <typename Symbol> constexpr auto go_to(Symbol const &symbol, set<>) -> set<>;
+template <typename Symbol>
+constexpr auto go_to(Symbol const &symbol, set<>) -> set<>;
 
 template <typename Symbol, typename Lhs, typename... Seen, typename... Rules>
 constexpr auto go_to(Symbol const &symbol,
@@ -251,7 +254,7 @@ template <
 constexpr auto go_tos(set<Symbol, Symbols...>,
                       set<Nonterminals...> nonterminals, set<Rules...> state,
                       set<AllRules...> all_rules) noexcept
-     -> decltype(go_tos(set<Symbols...>(), nonterminals, state, all_rules));
+    -> decltype(go_tos(set<Symbols...>(), nonterminals, state, all_rules));
 
 template <
     typename Symbol, typename... Symbols, typename... Nonterminals,
@@ -311,7 +314,7 @@ constexpr auto make_states(Start const &start_symbol, set<Rules...> rules,
                            set<Nonterminals...> nonterminals,
                            set<Terminals...> terminals) noexcept
     -> decltype(add_state(closure(start_symbol, rules, nonterminals), set<>(),
-                         rules, join(nonterminals, terminals), nonterminals));
+                          rules, join(nonterminals, terminals), nonterminals));
 
 enum class action_type {
   Unreachable,
@@ -603,21 +606,54 @@ struct symbol {
   virtual ~symbol() {}
 };
 
-template <typename Symbols, typename Lhs, typename... Rhs>
-constexpr void eval_nonterminal(Symbols &symbols) {
+template <typename... Symbols> constexpr bool all_symbols() {
+  return (std::is_base_of<symbol, Symbols>::value && ...);
+}
+
+template <typename... Symbols> constexpr bool all_symbols(set<Symbols...>) {
+  return (std::is_base_of<symbol, Symbols>::value && ...);
+}
+
+template <typename Lhs, typename... Rhs>
+constexpr void eval_nonterminal(std::vector<symbol *> &symbols) {
   auto args_iter = symbols.end() - sizeof...(Rhs);
-  Lhs *nonterminal = new Lhs{(std::move(*dynamic_cast<Rhs *>(*args_iter++)))...};
+  Lhs *nonterminal =
+      new Lhs{(std::move(*dynamic_cast<Rhs *>(*args_iter++)))...};
   symbols.erase(symbols.end() - sizeof...(Rhs), symbols.end());
   symbols.push_back(nonterminal);
 }
 
-template <typename... Symbols>
-using eval_fn = void (*)(std::vector<symbol *> &);
+template <typename Symbols, typename Lhs, typename... Rhs>
+constexpr void eval_nonterminal(std::vector<Symbols> &symbols) {
+  auto args_iter = symbols.end() - sizeof...(Rhs);
+  Lhs nonterminal{(std::move(std::get<Rhs>(*args_iter++)))...};
+  symbols.erase(symbols.end() - sizeof...(Rhs), symbols.end());
+  symbols.emplace_back(std::move(nonterminal));
+}
 
-template <typename Lhs, typename... Rhs, typename... Symbols>
+template <typename... Symbols, typename std::enable_if<all_symbols<Symbols...>(), int>::type = 0>
+constexpr auto eval_nonterminal_fn() -> void (*)(std::vector<symbol *> &);
+
+template <typename... Symbols, typename std::enable_if<!all_symbols<Symbols...>(), int>::type = 0>
+constexpr auto eval_nonterminal_fn() -> void (*)(std::vector<std::variant<Symbols...>> &);
+
+template <typename... Symbols>
+using eval_fn = decltype(eval_nonterminal_fn<Symbols...>());
+
+template <
+    typename Lhs, typename... Rhs, typename... Symbols,
+    typename std::enable_if<all_symbols<Symbols...>(), int>::type = 0>
 constexpr eval_fn<Symbols...> init_eval_fn(rule<Lhs, Rhs...>,
                                            set<Symbols...>) noexcept {
-  return &eval_nonterminal<std::vector<symbol *>, Lhs, Rhs...>;
+  return &eval_nonterminal<Lhs, Rhs...>;
+}
+
+template <
+    typename Lhs, typename... Rhs, typename... Symbols,
+    typename std::enable_if<!all_symbols<Symbols...>(), int>::type = 0>
+constexpr eval_fn<Symbols...> init_eval_fn(rule<Lhs, Rhs...>,
+                                           set<Symbols...>) noexcept {
+  return &eval_nonterminal<std::variant<Symbols...>, Lhs, Rhs...>;
 }
 
 template <typename... Symbols>
@@ -628,6 +664,12 @@ constexpr std::array<eval_fn<Symbols...>, sizeof...(Rules)>
 init_eval_fns(set<Rules...>, set<Symbols...> symbols) noexcept {
   return {init_eval_fn(Rules(), symbols)...};
 }
+
+template <typename... Symbols, typename std::enable_if<all_symbols<Symbols...>(), int>::type = 0>
+constexpr auto value_stack(set<Symbols...>) -> std::vector<symbol *>;
+
+template <typename... Symbols, typename std::enable_if<!all_symbols<Symbols...>(), int>::type = 0>
+constexpr auto value_stack(set<Symbols...>) -> std::vector<std::variant<Symbols...>>;
 
 template <typename Start, typename Rules, typename Nonterminals,
           typename Terminals>
@@ -647,7 +689,7 @@ struct transition_table {
           init_eval_fns(Rules(), join(Terminals(), Nonterminals()));
 
   std::vector<size_t> stack{0};
-  std::vector<symbol *> values{0};
+  decltype(value_stack(symbols())) values{0};
 
   template <typename Token> bool read_token(Token &&token) {
     size_t action_idx = idx_of(token, Terminals());
@@ -656,7 +698,11 @@ struct transition_table {
       switch (act.type) {
       case action_type::Shift:
         stack.push_back(act.idx);
-        values.emplace_back(new Token(std::move(token)));
+        if constexpr (all_symbols(symbols())) {
+          values.emplace_back(new Token(std::move(token)));
+        } else {
+          values.emplace_back(std::move(token));
+        }
         return false;
       case action_type::Reduce: {
         (eval_functions[act.produce_fn])(values);
@@ -680,7 +726,11 @@ struct transition_table {
   Start const &get_parse_result() {
     if (rows[stack.back()].actions[0].type == action_type::Accept) {
       (eval_functions[rows[stack.back()].actions[0].produce_fn])(values);
-      return *dynamic_cast<Start *>(values.back());
+      if constexpr (all_symbols(symbols())) {
+        return *dynamic_cast<Start *>(values.back());
+      } else {
+        return std::get<Start>(values.back());
+      }
     } else {
       throw std::runtime_error{"Parse result not available yet"};
     }
