@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "parser.hpp"
+#include "scanner.hpp"
 using namespace parser;
 
 struct id {
