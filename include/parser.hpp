@@ -489,6 +489,18 @@ constexpr bool contains_reduce(
 
 constexpr bool contains_reduce(set<>) noexcept { return false; }
 
+template <typename Lhs, typename... Seen, typename... Rhs, typename... Rules>
+constexpr size_t
+num_reduces(set<bullet_rule<Lhs, set<Seen...>, Rhs...>, Rules...>) noexcept {
+  if constexpr (sizeof...(Rhs) == 0) {
+    return 1 + num_reduces(set<Rules...>());
+  } else {
+    return num_reduces(set<Rules...>());
+  }
+}
+
+constexpr size_t num_reduces(set<>) noexcept { return 0; }
+
 template <typename Lhs, typename... Seen, typename... Rhs, typename... Rules,
           typename... AllRules,
           typename std::enable_if<sizeof...(Rhs) == 0, int>::type = 0>
@@ -535,6 +547,13 @@ constexpr action init_shift(set<State...> state, set<States...>,
   } else {
     return {action_type::Unreachable};
   }
+}
+
+template <typename... State, typename... Terminals>
+constexpr bool contains_shift(set<State...> state, set<Terminals...>) noexcept {
+  return ((!std::is_same<decltype(go_to(std::declval<Terminals>(), state)),
+                         set<>>::value) ||
+          ...);
 }
 
 template <
@@ -602,6 +621,23 @@ constexpr auto init_rows(set<Start>, set<Rules...> rules, set<Nonterminals...>,
       set<AllStates...>(), rules)...};
 }
 
+template <typename... States>
+constexpr bool reduce_reduce_conflict(set<States...>) noexcept {
+  return ((num_reduces(States()) > 1) || ...);
+}
+
+template <typename... States, typename... Terminals>
+constexpr bool shift_reduce_conflict(set<States...>,
+                                     set<Terminals...> terminals) noexcept {
+  return ((contains_reduce(States()) && contains_shift(States(), terminals)) ||
+          ...);
+}
+
+template <typename... States, typename... Terminals>
+constexpr bool has_conflict(set<States...> states, set<Terminals...> terminals) noexcept {
+  return reduce_reduce_conflict(states) || shift_reduce_conflict(states, terminals);
+}
+
 struct symbol {
   virtual ~symbol() {}
 };
@@ -631,26 +667,27 @@ constexpr void eval_nonterminal(std::vector<Symbols> &symbols) {
   symbols.emplace_back(std::move(nonterminal));
 }
 
-template <typename... Symbols, typename std::enable_if<all_symbols<Symbols...>(), int>::type = 0>
+template <typename... Symbols,
+          typename std::enable_if<all_symbols<Symbols...>(), int>::type = 0>
 constexpr auto eval_nonterminal_fn() -> void (*)(std::vector<symbol *> &);
 
-template <typename... Symbols, typename std::enable_if<!all_symbols<Symbols...>(), int>::type = 0>
-constexpr auto eval_nonterminal_fn() -> void (*)(std::vector<std::variant<Symbols...>> &);
+template <typename... Symbols,
+          typename std::enable_if<!all_symbols<Symbols...>(), int>::type = 0>
+constexpr auto eval_nonterminal_fn()
+    -> void (*)(std::vector<std::variant<Symbols...>> &);
 
 template <typename... Symbols>
 using eval_fn = decltype(eval_nonterminal_fn<Symbols...>());
 
-template <
-    typename Lhs, typename... Rhs, typename... Symbols,
-    typename std::enable_if<all_symbols<Symbols...>(), int>::type = 0>
+template <typename Lhs, typename... Rhs, typename... Symbols,
+          typename std::enable_if<all_symbols<Symbols...>(), int>::type = 0>
 constexpr eval_fn<Symbols...> init_eval_fn(rule<Lhs, Rhs...>,
                                            set<Symbols...>) noexcept {
   return &eval_nonterminal<Lhs, Rhs...>;
 }
 
-template <
-    typename Lhs, typename... Rhs, typename... Symbols,
-    typename std::enable_if<!all_symbols<Symbols...>(), int>::type = 0>
+template <typename Lhs, typename... Rhs, typename... Symbols,
+          typename std::enable_if<!all_symbols<Symbols...>(), int>::type = 0>
 constexpr eval_fn<Symbols...> init_eval_fn(rule<Lhs, Rhs...>,
                                            set<Symbols...>) noexcept {
   return &eval_nonterminal<std::variant<Symbols...>, Lhs, Rhs...>;
@@ -665,11 +702,14 @@ init_eval_fns(set<Rules...>, set<Symbols...> symbols) noexcept {
   return {init_eval_fn(Rules(), symbols)...};
 }
 
-template <typename... Symbols, typename std::enable_if<all_symbols<Symbols...>(), int>::type = 0>
+template <typename... Symbols,
+          typename std::enable_if<all_symbols<Symbols...>(), int>::type = 0>
 constexpr auto value_stack(set<Symbols...>) -> std::vector<symbol *>;
 
-template <typename... Symbols, typename std::enable_if<!all_symbols<Symbols...>(), int>::type = 0>
-constexpr auto value_stack(set<Symbols...>) -> std::vector<std::variant<Symbols...>>;
+template <typename... Symbols,
+          typename std::enable_if<!all_symbols<Symbols...>(), int>::type = 0>
+constexpr auto value_stack(set<Symbols...>)
+    -> std::vector<std::variant<Symbols...>>;
 
 template <typename Start, typename Rules, typename Nonterminals,
           typename Terminals>
